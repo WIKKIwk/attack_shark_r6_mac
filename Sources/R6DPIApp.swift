@@ -910,138 +910,141 @@ private struct ContentView: View {
     }
 
     private var sensorPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Sensor Tuning")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(primaryText)
-                    Text(model.sensor.sensorModel)
-                        .font(.caption)
-                        .foregroundStyle(secondaryText)
-                }
-                Spacer()
-                Text("Battery \(model.sensor.batteryPercent)%  •  Profile \(model.profile == 0 ? "-" : "\(model.profile)")")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(secondaryText)
-            }
-
-            VStack(spacing: 8) {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    sensorToggle("Motion Sync", .motionSync, model.sensor.motionSync)
-                    sensorToggle("Ripple Control", .rippleControl, model.sensor.rippleControl)
-                }
-                HStack {
-                    sensorToggle("Angle Snap", .angleSnap, model.sensor.angleSnap)
-                    sensorToggle("Low Latency", .trackingMode, model.sensor.trackingMode)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Lift-off Distance")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(secondaryText)
-                    Spacer()
-                    Text("\(model.sensor.lod)")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(primaryText)
-                }
-
-                HStack(spacing: 8) {
-                    ForEach([1, 2], id: \.self) { value in
-                        lodButton(value)
-                    }
-                }
-            }
-            .padding(12)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(borderColor)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Device Performance")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(secondaryText)
-                    Spacer()
-                    Text("Polling \(pollingLabel(model.sensor.pollingRateCode))")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(primaryText)
-                }
-
-                HStack {
-                    sensorToggle("Hyper Mode", .hyperMode, model.sensor.hyperMode)
-                    sensorToggle("DPI Indicator", .dpiIndicator, model.sensor.dpiIndicator)
-                }
-
-                HStack {
-                    sensorToggle("DPI X/Y Split", .dpiXY, model.sensor.dpiXY)
-                    comboKeyToggle
-                }
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Debounce")
-                            .font(.caption.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Sensor Tuning")
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(primaryText)
-                        Text("\(model.sensor.debounceTime) ms")
-                            .font(.caption2)
+                        Text(model.sensor.sensorModel)
+                            .font(.caption)
                             .foregroundStyle(secondaryText)
                     }
-                    .padding(11)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(borderColor)
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    ForEach([0, 2, 4, 8], id: \.self) { value in
-                        settingButton("\(value)ms", active: model.sensor.debounceTime == value) {
-                            model.setDebounceTime(value)
-                        }
-                    }
-                }
-
-                HStack {
-                    Text("Sleep Time")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(secondaryText)
                     Spacer()
-                    Text(model.sensor.sleepTime == 0 ? "Off / Default" : "\(model.sensor.sleepTime)")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(primaryText)
+                    Text("Battery \(model.sensor.batteryPercent)%  •  Profile \(model.profile == 0 ? "-" : "\(model.profile)")")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(secondaryText)
                 }
 
-                HStack(spacing: 8) {
-                    ForEach([0, 60, 300, 600], id: \.self) { value in
-                        settingButton(sleepLabel(value), active: model.sensor.sleepTime == value) {
-                            model.setSleepTime(value)
+                VStack(spacing: 8) {
+                    HStack {
+                        sensorToggle("Motion Sync", .motionSync, model.sensor.motionSync)
+                        sensorToggle("Ripple Control", .rippleControl, model.sensor.rippleControl)
+                    }
+                    HStack {
+                        sensorToggle("Angle Snap", .angleSnap, model.sensor.angleSnap)
+                        sensorToggle("Low Latency", .trackingMode, model.sensor.trackingMode)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Lift-off Distance")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(secondaryText)
+                        Spacer()
+                        Text("\(model.sensor.lod)")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(primaryText)
+                    }
+
+                    HStack(spacing: 8) {
+                        ForEach([1, 2], id: \.self) { value in
+                            lodButton(value)
                         }
                     }
                 }
-            }
-            .padding(12)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(borderColor)
-            }
+                .padding(12)
+                .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(borderColor)
+                }
 
-            Text("Low Latency va Hyper Mode batareya sarfini oshiradi. Polling hozir read-only, mapping xavfsiz tasdiqlangandan keyin yozish qo'shiladi.")
-                .font(.caption)
-                .foregroundStyle(secondaryText)
-                .lineLimit(2)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Device Performance")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(secondaryText)
+                        Spacer()
+                        Text("Polling \(pollingLabel(model.sensor.pollingRateCode))")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(primaryText)
+                    }
+
+                    HStack {
+                        sensorToggle("Hyper Mode", .hyperMode, model.sensor.hyperMode)
+                        sensorToggle("DPI Indicator", .dpiIndicator, model.sensor.dpiIndicator)
+                    }
+
+                    HStack {
+                        sensorToggle("DPI X/Y Split", .dpiXY, model.sensor.dpiXY)
+                        comboKeyToggle
+                    }
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Debounce")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(primaryText)
+                            Text("\(model.sensor.debounceTime) ms")
+                                .font(.caption2)
+                                .foregroundStyle(secondaryText)
+                        }
+                        .padding(11)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(borderColor)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        ForEach([0, 2, 4, 8], id: \.self) { value in
+                            settingButton("\(value)ms", active: model.sensor.debounceTime == value) {
+                                model.setDebounceTime(value)
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Text("Sleep Time")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(secondaryText)
+                        Spacer()
+                        Text(model.sensor.sleepTime == 0 ? "Off / Default" : "\(model.sensor.sleepTime)")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(primaryText)
+                    }
+
+                    HStack(spacing: 8) {
+                        ForEach([0, 60, 300, 600], id: \.self) { value in
+                            settingButton(sleepLabel(value), active: model.sensor.sleepTime == value) {
+                                model.setSleepTime(value)
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(borderColor)
+                }
+
+                Text("Low Latency va Hyper Mode batareya sarfini oshiradi. Polling hozir read-only, mapping xavfsiz tasdiqlangandan keyin yozish qo'shiladi.")
+                    .font(.caption)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(2)
+            }
+            .padding(14)
         }
-        .padding(14)
+        .scrollIndicators(.visible)
         .background(panelColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .glassEffect(.regular.tint(Color.white.opacity(0.02)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
