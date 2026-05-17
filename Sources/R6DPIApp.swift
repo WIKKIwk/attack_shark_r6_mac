@@ -9,6 +9,31 @@ private struct DPIStage: Identifiable, Equatable, Sendable {
     var label: String { "\(x) DPI" }
 }
 
+private struct SensorSettings: Sendable {
+    var sensorModel: String = "-"
+    var lod: Int = 1
+    var motionSync = false
+    var angleSnap = false
+    var rippleControl = false
+    var trackingMode = false
+}
+
+private enum SensorToggle: Sendable {
+    case motionSync
+    case angleSnap
+    case rippleControl
+    case trackingMode
+
+    var setCode: UInt8 {
+        switch self {
+        case .motionSync: return 9
+        case .angleSnap: return 4
+        case .rippleControl: return 10
+        case .trackingMode: return 19
+        }
+    }
+}
+
 private enum R6Error: LocalizedError {
     case deviceNotFound
     case openFailed(IOReturn)
@@ -184,6 +209,69 @@ private final class R6HID: @unchecked Sendable {
         _ = try transact(request)
     }
 
+    func sensorSettings(profile: Int) throws -> SensorSettings {
+        SensorSettings(
+            sensorModel: try sensorModelName(),
+            lod: try getByteFeature(profile: profile, code: 136),
+            motionSync: try getBoolFeature(profile: profile, code: 137),
+            angleSnap: try getBoolFeature(profile: profile, code: 132),
+            rippleControl: try getBoolFeature(profile: profile, code: 138),
+            trackingMode: try getBoolFeature(profile: profile, code: 147)
+        )
+    }
+
+    func setLOD(profile: Int, value: Int) throws {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[4] = 1
+        request[5] = 8
+        request[6] = UInt8(profile)
+        request[7] = UInt8(value)
+
+        _ = try transact(request)
+    }
+
+    func setSensorToggle(profile: Int, toggle: SensorToggle, enabled: Bool) throws {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[4] = 1
+        request[5] = toggle.setCode
+        request[6] = UInt8(profile)
+        request[7] = enabled ? 1 : 0
+
+        _ = try transact(request)
+    }
+
+    private func sensorModelName() throws -> String {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 1
+        request[4] = 1
+        request[5] = 143
+
+        let response = try transact(request)
+        let model = Int(response[7 - hidIndex])
+        return model == 2 ? "PAW3950MAX" : "Sensor \(model)"
+    }
+
+    private func getBoolFeature(profile: Int, code: UInt8) throws -> Bool {
+        try getByteFeature(profile: profile, code: code) == 1
+    }
+
+    private func getByteFeature(profile: Int, code: UInt8) throws -> Int {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[4] = 1
+        request[5] = code
+        request[6] = UInt8(profile)
+
+        let response = try transact(request)
+        return Int(response[8 - hidIndex])
+    }
+
     private func transact(_ report: [UInt8], delayNanoseconds: UInt64 = 50_000_000) throws -> [UInt8] {
         guard let device else {
             throw R6Error.deviceNotFound
@@ -269,6 +357,7 @@ private struct R6Snapshot: Sendable {
     let profile: Int
     let activeStage: Int
     let stages: [DPIStage]
+    let sensor: SensorSettings
 }
 
 private final class R6ViewModel: ObservableObject, @unchecked Sendable {
@@ -277,6 +366,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
     @Published var activeStage = 0
     @Published var stages: [DPIStage] = []
     @Published var selectedDPI = 2400.0
+    @Published var sensor = SensorSettings()
     @Published var status = "R6 ulanmagan"
     @Published var isBusy = false
     @Published var isConnected = false
@@ -339,12 +429,33 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         }
     }
 
+    func setLOD(_ value: Int) {
+        let currentProfile = profile
+        run("LOD \(value) yozilmoqda...") { hid in
+            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            try hid.setLOD(profile: profile, value: value)
+            let snapshot = try Self.readSnapshot(from: hid)
+            return (snapshot, "LOD \(value) aktiv", true)
+        }
+    }
+
+    func setSensorToggle(_ toggle: SensorToggle, enabled: Bool) {
+        let currentProfile = profile
+        run("Sensor sozlamasi yozilmoqda...") { hid in
+            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            try hid.setSensorToggle(profile: profile, toggle: toggle, enabled: enabled)
+            let snapshot = try Self.readSnapshot(from: hid)
+            return (snapshot, "Sensor sozlamasi saqlandi", true)
+        }
+    }
+
     private static func readSnapshot(from hid: R6HID) throws -> R6Snapshot {
         let firmware = try hid.firmwareVersion()
         let profile = try hid.profileID()
         let stages = try hid.dpiStages(profile: profile)
         let activeStage = try hid.activeDPIStage(profile: profile)
-        return R6Snapshot(firmware: firmware, profile: profile, activeStage: activeStage, stages: stages)
+        let sensor = try hid.sensorSettings(profile: profile)
+        return R6Snapshot(firmware: firmware, profile: profile, activeStage: activeStage, stages: stages, sensor: sensor)
     }
 
     private static func connectWithRetry(_ hid: R6HID) throws {
@@ -368,6 +479,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         profile = snapshot.profile
         stages = snapshot.stages
         activeStage = snapshot.activeStage
+        sensor = snapshot.sensor
         if let active = snapshot.stages.first(where: { $0.id == snapshot.activeStage }) {
             selectedDPI = Double(active.x)
         }
@@ -406,6 +518,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
 
 private struct ContentView: View {
     @StateObject private var model = R6ViewModel()
+    @State private var selectedPanel = 0
 
     private let presets = [800, 1200, 1600, 2000, 2400, 2800, 3200, 5600, 8000]
     private let backgroundColor = Color(red: 0.035, green: 0.035, blue: 0.04)
@@ -423,8 +536,13 @@ private struct ContentView: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 currentCard
-                controls
-                stageGrid
+                panelPicker
+                if selectedPanel == 0 {
+                    controls
+                    stageGrid
+                } else {
+                    sensorPanel
+                }
                 footer
             }
             .padding(18)
@@ -502,6 +620,15 @@ private struct ContentView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(borderColor)
         }
+    }
+
+    private var panelPicker: some View {
+        Picker("", selection: $selectedPanel) {
+            Text("DPI").tag(0)
+            Text("Sensor").tag(1)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
     }
 
     private var controls: some View {
@@ -615,6 +742,127 @@ private struct ContentView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(borderColor)
+        }
+    }
+
+    private var sensorPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Sensor Tuning")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(primaryText)
+                    Text(model.sensor.sensorModel)
+                        .font(.caption)
+                        .foregroundStyle(secondaryText)
+                }
+                Spacer()
+                Text("Profile \(model.profile == 0 ? "-" : "\(model.profile)")")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(secondaryText)
+            }
+
+            VStack(spacing: 8) {
+                HStack {
+                    sensorToggle("Motion Sync", .motionSync, model.sensor.motionSync)
+                    sensorToggle("Ripple Control", .rippleControl, model.sensor.rippleControl)
+                }
+                HStack {
+                    sensorToggle("Angle Snap", .angleSnap, model.sensor.angleSnap)
+                    sensorToggle("Tracking Mode", .trackingMode, model.sensor.trackingMode)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Lift-off Distance")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(secondaryText)
+                    Spacer()
+                    Text("\(model.sensor.lod)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(primaryText)
+                }
+
+                HStack(spacing: 8) {
+                    ForEach([1, 2], id: \.self) { value in
+                        lodButton(value)
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(borderColor)
+            }
+
+            Text("Tracking Mode sensorni maksimal rejimda ishlatadi va batareya sarfini oshiradi.")
+                .font(.caption)
+                .foregroundStyle(secondaryText)
+                .lineLimit(2)
+        }
+        .padding(14)
+        .background(panelColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassEffect(.regular.tint(Color.white.opacity(0.02)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(borderColor)
+        }
+    }
+
+    private func sensorToggle(_ title: String, _ toggle: SensorToggle, _ isOn: Bool) -> some View {
+        Button {
+            model.setSensorToggle(toggle, enabled: !isOn)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(primaryText)
+                    Text(isOn ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(secondaryText)
+                }
+                Spacer()
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isOn ? primaryText : secondaryText)
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity)
+            .background(isOn ? Color.white.opacity(0.14) : Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .glassEffect(.regular.tint(isOn ? Color.white.opacity(0.08) : Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(isOn ? Color.white.opacity(0.18) : borderColor)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isBusy)
+    }
+
+    @ViewBuilder
+    private func lodButton(_ value: Int) -> some View {
+        let isActive = value == model.sensor.lod
+        let title = value == 1 ? "Low LOD" : "High LOD"
+
+        if isActive {
+            Button(title) {
+                model.setLOD(value)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.small)
+            .tint(accentColor)
+            .disabled(model.isBusy)
+        } else {
+            Button(title) {
+                model.setLOD(value)
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .tint(accentColor)
+            .disabled(model.isBusy)
         }
     }
 
