@@ -85,6 +85,19 @@ The app bundle is generated here:
 build/R6 DPI Studio.app
 ```
 
+## Package DMG
+
+```sh
+./build.sh
+./package-dmg.sh
+```
+
+The DMG installer is generated here:
+
+```sh
+build/R6-DPI-Studio.dmg
+```
+
 ## Run
 
 ```sh
@@ -109,6 +122,7 @@ open "$HOME/Desktop/R6 DPI Studio.app"
 |   `-- R6DPI.iconset/
 |-- Info.plist
 |-- build.sh
+|-- package-dmg.sh
 `-- README.md
 ```
 
