@@ -762,38 +762,6 @@ private struct ContentView: View {
                     .foregroundStyle(secondaryText)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Sensitivity")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(secondaryText)
-                    Spacer()
-                    Text("\(Int(model.selectedDPI.rounded())) DPI")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(primaryText)
-                }
-
-                Slider(value: $model.selectedDPI, in: 100...42000, step: 100)
-                    .tint(accentColor)
-
-                Button {
-                    model.applySelectedDPI()
-                } label: {
-                    Label("Apply Sensitivity", systemImage: "scope")
-                }
-                .buttonStyle(.glassProminent)
-                .controlSize(.small)
-                .tint(accentColor)
-                .disabled(model.isBusy)
-            }
-            .padding(12)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(borderColor)
-            }
-
             VStack(spacing: 8) {
                 HStack {
                     sensorToggle("Motion Sync", .motionSync, model.sensor.motionSync)
@@ -830,7 +798,7 @@ private struct ContentView: View {
                     .stroke(borderColor)
             }
 
-            Text("Sensitivity = DPI. Low Latency R6 Tracking Mode'ni yoqadi: kechikish kamayadi, batareya sarfi oshadi.")
+            Text("Low Latency R6 Tracking Mode'ni yoqadi: kechikish kamayadi, batareya sarfi oshadi.")
                 .font(.caption)
                 .foregroundStyle(secondaryText)
                 .lineLimit(2)
