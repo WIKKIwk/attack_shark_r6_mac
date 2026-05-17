@@ -20,4 +20,9 @@ swiftc \
   -framework IOKit \
   -parse-as-library
 
+swiftc \
+  "$ROOT/Sources/R6DPIHelper.swift" \
+  -o "$MACOS/R6DPIHelper" \
+  -framework IOKit
+
 echo "$APP"

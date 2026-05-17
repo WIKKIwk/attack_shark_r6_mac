@@ -573,87 +573,45 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
     }
 
     func connect() {
-        run("Ulanmoqda...") { hid in
-            try Self.connectWithRetry(hid)
-            return (nil, "R6 HID ochildi. Sozlamani yozish mumkin.", true)
-        }
+        status = "Tayyor. Apply DPI helper orqali ishlaydi."
+        isBusy = false
     }
 
     func refresh() {
-        run("Yangilanmoqda...") { hid in
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "Sozlamalar o'qildi", true)
-        }
+        status = "Readback vaqtincha o'chirilgan. Tizim osilmasligi uchun faqat Apply DPI ishlaydi."
+        isBusy = false
     }
 
     func applySelectedDPI() {
         let dpi = clamp(Int(selectedDPI.rounded()))
-        let connected = isConnected
-        let currentProfile = profile > 0 ? profile : 1
-        let currentStage = activeStage > 0 ? activeStage : 1
-        run("\(dpi) DPI yozilmoqda...") { hid in
-            if !connected {
-                try Self.connectWithRetry(hid)
-            }
-
-            try hid.writeDPIStage(profile: currentProfile, stageID: currentStage, dpi: dpi)
-            try hid.setActiveDPIStage(profile: currentProfile, stage: currentStage)
-            return (nil, "\(dpi) DPI buyruq yuborildi", true)
+        run("\(dpi) DPI yozilmoqda...") { _ in
+            _ = try Self.runHelper(["apply-dpi", "\(dpi)"])
+            return (nil, "\(dpi) DPI helper orqali yozildi", true)
         }
     }
 
     func activate(stage: DPIStage) {
-        let currentProfile = profile
-        run("\(stage.label) aktiv qilinmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : 1
-            try hid.setActiveDPIStage(profile: profile, stage: stage.id)
-            return (nil, "\(stage.label) aktiv qilish buyrug'i yuborildi", true)
-        }
+        status = "\(stage.label) uchun stage switch vaqtincha o'chirilgan. DPI yozish Apply orqali ishlaydi."
     }
 
     func setLOD(_ value: Int) {
-        let currentProfile = profile
-        run("LOD \(value) yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : 1
-            try hid.setLOD(profile: profile, value: value)
-            return (nil, "LOD \(value) buyrug'i yuborildi", true)
-        }
+        status = "LOD write vaqtincha o'chirilgan. Avval DPI helper stabil ishlashi kerak."
     }
 
     func setSensorToggle(_ toggle: SensorToggle, enabled: Bool) {
-        let currentProfile = profile
-        run("Sensor sozlamasi yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : 1
-            try hid.setSensorToggle(profile: profile, toggle: toggle, enabled: enabled)
-            return (nil, "Sensor buyrug'i yuborildi", true)
-        }
+        status = "Sensor write vaqtincha o'chirilgan. Noto'g'ri HID report tizim inputini buzmasligi kerak."
     }
 
     func setDebounceTime(_ value: Int) {
-        let currentProfile = profile
-        run("Debounce \(value)ms yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : 1
-            try hid.setDebounceTime(profile: profile, value: value)
-            return (nil, "Debounce \(value)ms buyrug'i yuborildi", true)
-        }
+        status = "Debounce write vaqtincha o'chirilgan. Avval DPI helper stabil ishlashi kerak."
     }
 
     func setSleepTime(_ value: Int) {
-        let currentProfile = profile
-        run("Sleep \(value) yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : 1
-            try hid.setSleepTime(profile: profile, value: value)
-            return (nil, "Sleep time buyrug'i yuborildi", true)
-        }
+        status = "Sleep write vaqtincha o'chirilgan. Avval DPI helper stabil ishlashi kerak."
     }
 
     func setButtonCombine(enabled: Bool) {
-        let currentProfile = profile
-        run("Combo keys yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : 1
-            try hid.setButtonCombine(profile: profile, enabled: enabled)
-            return (nil, "Combo keys buyrug'i yuborildi", true)
-        }
+        status = "Combo keys write vaqtincha o'chirilgan. Noto'g'ri HID report tizim inputini buzmasligi kerak."
     }
 
     private static func readSnapshot(from hid: R6HID) throws -> R6Snapshot {
@@ -679,6 +637,36 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
             }
         }
         throw lastError ?? R6Error.deviceNotFound
+    }
+
+    private static func runHelper(_ arguments: [String], timeout: TimeInterval = 3) throws -> String {
+        let executable = Bundle.main.url(forAuxiliaryExecutable: "R6DPIHelper")
+            ?? Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/R6DPIHelper")
+        let process = Process()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        let done = DispatchSemaphore(value: 0)
+
+        process.executableURL = executable
+        process.arguments = arguments
+        process.standardOutput = stdout
+        process.standardError = stderr
+        process.terminationHandler = { _ in
+            done.signal()
+        }
+
+        try process.run()
+        if done.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            throw R6Error.invalidResponse("HID helper timeout")
+        }
+
+        let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let error = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        guard process.terminationStatus == 0 else {
+            throw R6Error.invalidResponse(error.isEmpty ? output : error)
+        }
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func apply(_ snapshot: R6Snapshot) {
@@ -758,12 +746,6 @@ private struct ContentView: View {
         }
         .frame(width: 560, height: 620)
         .preferredColorScheme(.dark)
-        .onAppear {
-            Task {
-                try? await Task.sleep(for: .milliseconds(250))
-                model.connect()
-            }
-        }
     }
 
     private var header: some View {
