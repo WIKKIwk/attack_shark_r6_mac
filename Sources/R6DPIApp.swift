@@ -290,7 +290,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
 
     func connect() {
         run("Ulanmoqda...") { hid in
-            try hid.connect()
+            try Self.connectWithRetry(hid)
             let snapshot = try Self.readSnapshot(from: hid)
             return (snapshot, "R6 ulandi", true)
         }
@@ -308,7 +308,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         let connected = isConnected
         run("\(dpi) DPI yozilmoqda...") { hid in
             if !connected {
-                try hid.connect()
+                try Self.connectWithRetry(hid)
             }
 
             var snapshot = try Self.readSnapshot(from: hid)
@@ -345,6 +345,22 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         let stages = try hid.dpiStages(profile: profile)
         let activeStage = try hid.activeDPIStage(profile: profile)
         return R6Snapshot(firmware: firmware, profile: profile, activeStage: activeStage, stages: stages)
+    }
+
+    private static func connectWithRetry(_ hid: R6HID) throws {
+        var lastError: Error?
+        for attempt in 0..<6 {
+            do {
+                try hid.connect()
+                return
+            } catch {
+                lastError = error
+                if attempt < 5 {
+                    Thread.sleep(forTimeInterval: 0.18)
+                }
+            }
+        }
+        throw lastError ?? R6Error.deviceNotFound
     }
 
     private func apply(_ snapshot: R6Snapshot) {
@@ -416,7 +432,10 @@ private struct ContentView: View {
         .frame(width: 560, height: 620)
         .preferredColorScheme(.dark)
         .onAppear {
-            model.connect()
+            Task {
+                try? await Task.sleep(for: .milliseconds(250))
+                model.connect()
+            }
         }
     }
 
