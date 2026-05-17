@@ -12,10 +12,16 @@ private struct DPIStage: Identifiable, Equatable, Sendable {
 private struct SensorSettings: Sendable {
     var sensorModel: String = "-"
     var lod: Int = 1
+    var pollingRateCode = 0
+    var debounceTime = 0
+    var sleepTime = 0
     var motionSync = false
     var angleSnap = false
     var rippleControl = false
     var trackingMode = false
+    var hyperMode = false
+    var dpiIndicator = false
+    var dpiXY = false
 }
 
 private enum SensorToggle: Sendable {
@@ -23,6 +29,9 @@ private enum SensorToggle: Sendable {
     case angleSnap
     case rippleControl
     case trackingMode
+    case hyperMode
+    case dpiIndicator
+    case dpiXY
 
     var setCode: UInt8 {
         switch self {
@@ -30,6 +39,28 @@ private enum SensorToggle: Sendable {
         case .angleSnap: return 4
         case .rippleControl: return 10
         case .trackingMode: return 19
+        case .hyperMode: return 11
+        case .dpiIndicator: return 4
+        case .dpiXY: return 13
+        }
+    }
+
+    var getCode: UInt8 {
+        switch self {
+        case .motionSync: return 137
+        case .angleSnap: return 132
+        case .rippleControl: return 138
+        case .trackingMode: return 147
+        case .hyperMode: return 139
+        case .dpiIndicator: return 132
+        case .dpiXY: return 141
+        }
+    }
+
+    var commandGroup: UInt8 {
+        switch self {
+        case .dpiIndicator: return 2
+        default: return 1
         }
     }
 }
@@ -213,10 +244,16 @@ private final class R6HID: @unchecked Sendable {
         SensorSettings(
             sensorModel: try sensorModelName(),
             lod: try getByteFeature(profile: profile, code: 136),
-            motionSync: try getBoolFeature(profile: profile, code: 137),
-            angleSnap: try getBoolFeature(profile: profile, code: 132),
-            rippleControl: try getBoolFeature(profile: profile, code: 138),
-            trackingMode: try getBoolFeature(profile: profile, code: 147)
+            pollingRateCode: try pollingRateCode(profile: profile),
+            debounceTime: try debounceTime(profile: profile),
+            sleepTime: try sleepTime(profile: profile),
+            motionSync: try getBoolFeature(profile: profile, toggle: .motionSync),
+            angleSnap: try getBoolFeature(profile: profile, toggle: .angleSnap),
+            rippleControl: try getBoolFeature(profile: profile, toggle: .rippleControl),
+            trackingMode: try getBoolFeature(profile: profile, toggle: .trackingMode),
+            hyperMode: try getBoolFeature(profile: profile, toggle: .hyperMode),
+            dpiIndicator: try getBoolFeature(profile: profile, toggle: .dpiIndicator),
+            dpiXY: try getBoolFeature(profile: profile, toggle: .dpiXY)
         )
     }
 
@@ -236,10 +273,33 @@ private final class R6HID: @unchecked Sendable {
         var request = emptyReport()
         request[2] = 2
         request[3] = 2
-        request[4] = 1
+        request[4] = toggle.commandGroup
         request[5] = toggle.setCode
         request[6] = UInt8(profile)
         request[7] = enabled ? 1 : 0
+
+        _ = try transact(request)
+    }
+
+    func setDebounceTime(profile: Int, value: Int) throws {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[5] = 8
+        request[6] = UInt8(profile)
+        request[7] = UInt8(value)
+
+        _ = try transact(request)
+    }
+
+    func setSleepTime(profile: Int, value: Int) throws {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 3
+        request[5] = 7
+        request[6] = UInt8(profile)
+        request[7] = UInt8((value >> 8) & 0xff)
+        request[8] = UInt8(value & 0xff)
 
         _ = try transact(request)
     }
@@ -256,20 +316,50 @@ private final class R6HID: @unchecked Sendable {
         return model == 2 ? "PAW3950MAX" : "Sensor \(model)"
     }
 
-    private func getBoolFeature(profile: Int, code: UInt8) throws -> Bool {
-        try getByteFeature(profile: profile, code: code) == 1
+    private func getBoolFeature(profile: Int, toggle: SensorToggle) throws -> Bool {
+        try getByteFeature(profile: profile, code: toggle.getCode, group: toggle.commandGroup) == 1
     }
 
-    private func getByteFeature(profile: Int, code: UInt8) throws -> Int {
+    private func getByteFeature(profile: Int, code: UInt8, group: UInt8 = 1) throws -> Int {
         var request = emptyReport()
         request[2] = 2
         request[3] = 2
-        request[4] = 1
+        request[4] = group
         request[5] = code
         request[6] = UInt8(profile)
 
         let response = try transact(request)
         return Int(response[8 - hidIndex])
+    }
+
+    private func pollingRateCode(profile: Int) throws -> Int {
+        var value = try getByteFeature(profile: profile, code: 128)
+        if value == 16 {
+            value = 1
+        }
+        return value
+    }
+
+    private func debounceTime(profile: Int) throws -> Int {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[5] = 136
+        request[6] = UInt8(profile)
+
+        let response = try transact(request)
+        return Int(response[8 - hidIndex])
+    }
+
+    private func sleepTime(profile: Int) throws -> Int {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 3
+        request[5] = 135
+        request[6] = UInt8(profile)
+
+        let response = try transact(request)
+        return (Int(response[8 - hidIndex]) << 8) + Int(response[9 - hidIndex])
     }
 
     private func transact(_ report: [UInt8], delayNanoseconds: UInt64 = 50_000_000) throws -> [UInt8] {
@@ -446,6 +536,26 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
             try hid.setSensorToggle(profile: profile, toggle: toggle, enabled: enabled)
             let snapshot = try Self.readSnapshot(from: hid)
             return (snapshot, "Sensor sozlamasi saqlandi", true)
+        }
+    }
+
+    func setDebounceTime(_ value: Int) {
+        let currentProfile = profile
+        run("Debounce \(value)ms yozilmoqda...") { hid in
+            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            try hid.setDebounceTime(profile: profile, value: value)
+            let snapshot = try Self.readSnapshot(from: hid)
+            return (snapshot, "Debounce \(value)ms saqlandi", true)
+        }
+    }
+
+    func setSleepTime(_ value: Int) {
+        let currentProfile = profile
+        run("Sleep \(value) yozilmoqda...") { hid in
+            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            try hid.setSleepTime(profile: profile, value: value)
+            let snapshot = try Self.readSnapshot(from: hid)
+            return (snapshot, "Sleep time saqlandi", true)
         }
     }
 
@@ -798,7 +908,77 @@ private struct ContentView: View {
                     .stroke(borderColor)
             }
 
-            Text("Low Latency R6 Tracking Mode'ni yoqadi: kechikish kamayadi, batareya sarfi oshadi.")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Device Performance")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(secondaryText)
+                    Spacer()
+                    Text("Polling \(pollingLabel(model.sensor.pollingRateCode))")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(primaryText)
+                }
+
+                HStack {
+                    sensorToggle("Hyper Mode", .hyperMode, model.sensor.hyperMode)
+                    sensorToggle("DPI Indicator", .dpiIndicator, model.sensor.dpiIndicator)
+                }
+
+                HStack {
+                    sensorToggle("DPI X/Y Split", .dpiXY, model.sensor.dpiXY)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Debounce")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(primaryText)
+                        Text("\(model.sensor.debounceTime) ms")
+                            .font(.caption2)
+                            .foregroundStyle(secondaryText)
+                    }
+                    .padding(11)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(borderColor)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    ForEach([0, 2, 4, 8], id: \.self) { value in
+                        settingButton("\(value)ms", active: model.sensor.debounceTime == value) {
+                            model.setDebounceTime(value)
+                        }
+                    }
+                }
+
+                HStack {
+                    Text("Sleep Time")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(secondaryText)
+                    Spacer()
+                    Text(model.sensor.sleepTime == 0 ? "Off / Default" : "\(model.sensor.sleepTime)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(primaryText)
+                }
+
+                HStack(spacing: 8) {
+                    ForEach([0, 60, 300, 600], id: \.self) { value in
+                        settingButton(sleepLabel(value), active: model.sensor.sleepTime == value) {
+                            model.setSleepTime(value)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .glassEffect(.regular.tint(Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(borderColor)
+            }
+
+            Text("Low Latency va Hyper Mode batareya sarfini oshiradi. Polling hozir read-only, mapping xavfsiz tasdiqlangandan keyin yozish qo'shiladi.")
                 .font(.caption)
                 .foregroundStyle(secondaryText)
                 .lineLimit(2)
@@ -840,6 +1020,44 @@ private struct ContentView: View {
         }
         .buttonStyle(.plain)
         .disabled(model.isBusy)
+    }
+
+    @ViewBuilder
+    private func settingButton(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
+        if active {
+            Button(title, action: action)
+                .buttonStyle(.glassProminent)
+                .controlSize(.small)
+                .tint(accentColor)
+                .disabled(model.isBusy)
+        } else {
+            Button(title, action: action)
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .tint(accentColor)
+                .disabled(model.isBusy)
+        }
+    }
+
+    private func pollingLabel(_ code: Int) -> String {
+        switch code {
+        case 1: return "1K"
+        case 2: return "2K"
+        case 4: return "4K"
+        case 8: return "8K"
+        case 128: return "Max"
+        default: return "Code \(code)"
+        }
+    }
+
+    private func sleepLabel(_ value: Int) -> String {
+        switch value {
+        case 0: return "Default"
+        case 60: return "1m"
+        case 300: return "5m"
+        case 600: return "10m"
+        default: return "\(value)"
+        }
     }
 
     @ViewBuilder
