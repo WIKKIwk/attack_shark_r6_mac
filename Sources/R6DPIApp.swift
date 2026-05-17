@@ -404,16 +404,16 @@ private struct ContentView: View {
         ZStack {
             backgroundColor.ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
                 header
                 currentCard
                 controls
                 stageGrid
                 footer
             }
-            .padding(24)
+            .padding(18)
         }
-        .frame(width: 520, height: 640)
+        .frame(width: 560, height: 620)
         .preferredColorScheme(.dark)
         .onAppear {
             model.connect()
@@ -421,27 +421,27 @@ private struct ContentView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(raisedPanelColor)
-                    .frame(width: 58, height: 58)
+                    .frame(width: 46, height: 46)
                     .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .stroke(borderColor)
                     }
                 Image(systemName: "computermouse")
-                    .font(.system(size: 27, weight: .semibold))
+                    .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(primaryText)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("R6 DPI Studio")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(primaryText)
                 Text("ATTACK SHARK R6 uchun native macOS controller")
-                    .font(.callout)
+                    .font(.caption)
                     .foregroundStyle(secondaryText)
             }
 
@@ -450,31 +450,33 @@ private struct ContentView: View {
     }
 
     private var currentCard: some View {
-        HStack(alignment: .center, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Active DPI")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(secondaryText)
                     .textCase(.uppercase)
                 Text(model.activeDPI > 0 ? "\(model.activeDPI)" : "-")
-                    .font(.system(size: 64, weight: .heavy, design: .rounded))
+                    .font(.system(size: 54, weight: .heavy, design: .rounded))
                     .foregroundStyle(primaryText)
                     .contentTransition(.numericText())
                 Text("Stage \(model.activeStage == 0 ? "-" : "\(model.activeStage)")  •  Profile \(model.profile == 0 ? "-" : "\(model.profile)")")
+                    .font(.callout)
                     .foregroundStyle(secondaryText)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 8) {
+            VStack(alignment: .trailing, spacing: 6) {
                 Label(model.isConnected ? "Connected" : "Disconnected", systemImage: model.isConnected ? "checkmark.circle.fill" : "xmark.circle")
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(model.isConnected ? primaryText : secondaryText)
                 Text("Firmware \(model.firmware)")
                     .font(.caption)
                     .foregroundStyle(secondaryText)
             }
         }
-        .padding(22)
+        .padding(18)
         .background(raisedPanelColor, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .glassEffect(.regular.tint(Color.white.opacity(0.03)), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
@@ -484,28 +486,28 @@ private struct ContentView: View {
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Custom DPI")
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(primaryText)
                 Spacer()
                 Text("\(Int(model.selectedDPI.rounded()))")
-                    .font(.title3.monospacedDigit().weight(.semibold))
+                    .font(.headline.monospacedDigit().weight(.semibold))
                     .foregroundStyle(accentColor)
             }
 
             Slider(value: $model.selectedDPI, in: 100...42000, step: 100)
                 .tint(accentColor)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 6) {
                 ForEach(presets, id: \.self) { dpi in
                     Button("\(dpi)") {
                         model.selectedDPI = Double(dpi)
                         model.applySelectedDPI()
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.regular)
+                    .controlSize(.small)
                     .tint(accentColor)
                     .glassEffect(.regular.tint(Color.white.opacity(0.03)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
@@ -518,6 +520,7 @@ private struct ContentView: View {
                     Label("Apply DPI", systemImage: "bolt.fill")
                 }
                 .buttonStyle(.glassProminent)
+                .controlSize(.small)
                 .tint(accentColor)
                 .disabled(model.isBusy)
 
@@ -527,6 +530,7 @@ private struct ContentView: View {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.glass)
+                .controlSize(.small)
                 .tint(accentColor)
                 .disabled(model.isBusy)
 
@@ -536,11 +540,12 @@ private struct ContentView: View {
                     Label("Reconnect", systemImage: "cable.connector")
                 }
                 .buttonStyle(.glass)
+                .controlSize(.small)
                 .tint(accentColor)
                 .disabled(model.isBusy)
             }
         }
-        .padding(18)
+        .padding(14)
         .background(panelColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .glassEffect(.regular.tint(Color.white.opacity(0.025)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
@@ -550,26 +555,26 @@ private struct ContentView: View {
     }
 
     private var stageGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Onboard Stages")
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(primaryText)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                 ForEach(model.stages) { stage in
                     Button {
                         model.activate(stage: stage)
                     } label: {
-                        VStack(spacing: 5) {
+                        VStack(spacing: 3) {
                             Text("Stage \(stage.id)")
-                                .font(.caption.weight(.semibold))
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(secondaryText)
                             Text(stage.label)
-                                .font(.headline.monospacedDigit())
+                                .font(.subheadline.monospacedDigit().weight(.semibold))
                                 .foregroundStyle(primaryText)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 9)
                         .background(stage.id == model.activeStage ? Color.white.opacity(0.16) : Color.white.opacity(0.055))
                         .glassEffect(
                             .regular.tint(stage.id == model.activeStage ? Color.white.opacity(0.09) : Color.white.opacity(0.025)).interactive(),
@@ -585,7 +590,7 @@ private struct ContentView: View {
                 }
             }
         }
-        .padding(18)
+        .padding(14)
         .background(panelColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .glassEffect(.regular.tint(Color.white.opacity(0.02)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
@@ -601,7 +606,7 @@ private struct ContentView: View {
                     .controlSize(.small)
             }
             Text(model.status)
-                .font(.callout)
+                .font(.caption)
                 .foregroundStyle(secondaryText)
                 .lineLimit(2)
             Spacer()
