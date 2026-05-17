@@ -103,6 +103,7 @@ private final class R6HID: @unchecked Sendable {
 
     deinit {
         disconnect()
+        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
     }
 
     func connect() throws {
@@ -115,11 +116,10 @@ private final class R6HID: @unchecked Sendable {
 
         IOHIDManagerSetDeviceMatching(manager, matching as CFDictionary)
         let managerOpen = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-        guard managerOpen == kIOReturnSuccess else {
-            throw R6Error.openFailed(managerOpen)
-        }
-
         guard let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> else {
+            if managerOpen != kIOReturnSuccess {
+                throw R6Error.openFailed(managerOpen)
+            }
             throw R6Error.deviceNotFound
         }
 
@@ -148,7 +148,6 @@ private final class R6HID: @unchecked Sendable {
         if let device {
             IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
         }
-        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         device = nil
         hidIndex = 0
     }
