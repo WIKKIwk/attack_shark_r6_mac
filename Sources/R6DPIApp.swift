@@ -91,6 +91,8 @@ private final class R6HID: @unchecked Sendable {
     private let vendorID = 0x373e
     private let productID = 0x0022
     private let preferredUsagePage = 0xffff
+    private let preferredUsage = 0
+    private let preferredInterfaceNumber = 2
     private let manager: IOHIDManager
     private var device: IOHIDDevice?
     private var hidIndex = 0
@@ -99,7 +101,13 @@ private final class R6HID: @unchecked Sendable {
         manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     }
 
+    deinit {
+        disconnect()
+    }
+
     func connect() throws {
+        disconnect()
+
         let matching: [String: Any] = [
             kIOHIDVendorIDKey as String: vendorID,
             kIOHIDProductIDKey as String: productID
@@ -134,7 +142,15 @@ private final class R6HID: @unchecked Sendable {
         }
 
         device = selected
-        _ = try firmwareVersion()
+    }
+
+    func disconnect() {
+        if let device {
+            IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
+        }
+        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        device = nil
+        hidIndex = 0
     }
 
     func firmwareVersion() throws -> String {
@@ -411,28 +427,38 @@ private final class R6HID: @unchecked Sendable {
             throw R6Error.deviceNotFound
         }
 
-        var output = report
+        var lastReadError: Error?
 
-        let outputLength = output.count
-        let setResult = output.withUnsafeMutableBufferPointer {
-            IOHIDDeviceSetReport(device, kIOHIDReportTypeFeature, CFIndex(0), $0.baseAddress!, outputLength)
-        }
-        guard setResult == kIOReturnSuccess else {
-            throw R6Error.reportFailed("Mouse'ga yozish", setResult)
+        for _ in 0..<3 {
+            var output = report
+
+            let outputLength = output.count
+            let setResult = output.withUnsafeMutableBufferPointer {
+                IOHIDDeviceSetReport(device, kIOHIDReportTypeFeature, CFIndex(0), $0.baseAddress!, outputLength)
+            }
+            guard setResult == kIOReturnSuccess else {
+                throw R6Error.reportFailed("Mouse'ga yozish", setResult)
+            }
+
+            Thread.sleep(forTimeInterval: Double(delayNanoseconds) / 1_000_000_000)
+
+            for _ in 0..<10 {
+                do {
+                    let response = try readFeatureReport(from: device)
+                    if isReady(response) {
+                        return response
+                    }
+                } catch {
+                    lastReadError = error
+                }
+                Thread.sleep(forTimeInterval: 0.03)
+            }
         }
 
-        Thread.sleep(forTimeInterval: Double(delayNanoseconds) / 1_000_000_000)
-
-        var response = try readFeatureReport(from: device)
-        for _ in 0..<30 where !isReady(response) {
-            Thread.sleep(forTimeInterval: 0.02)
-            response = try readFeatureReport(from: device)
+        if let lastReadError {
+            throw lastReadError
         }
-
-        if !isReady(response) {
-            throw R6Error.invalidResponse("Mouse javobi")
-        }
-        return response
+        throw R6Error.invalidResponse("Mouse javobi")
     }
 
     private func readFeatureReport(from device: IOHIDDevice) throws -> [UInt8] {
@@ -464,6 +490,12 @@ private final class R6HID: @unchecked Sendable {
         var result = 0
         if intProperty(device, kIOHIDPrimaryUsagePageKey as CFString) == preferredUsagePage {
             result += 100
+        }
+        if intProperty(device, kIOHIDPrimaryUsageKey as CFString) == preferredUsage {
+            result += 40
+        }
+        if intProperty(device, "bInterfaceNumber" as CFString) == preferredInterfaceNumber {
+            result += 40
         }
         if productName(device).localizedCaseInsensitiveContains("R6") {
             result += 50
@@ -618,7 +650,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         let profile = try hid.profileID()
         let stages = try hid.dpiStages(profile: profile)
         let activeStage = try hid.activeDPIStage(profile: profile)
-        let sensor = try hid.sensorSettings(profile: profile)
+        let sensor = (try? hid.sensorSettings(profile: profile)) ?? SensorSettings()
         return R6Snapshot(firmware: firmware, profile: profile, activeStage: activeStage, stages: stages, sensor: sensor)
     }
 
