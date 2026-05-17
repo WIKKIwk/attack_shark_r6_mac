@@ -12,8 +12,20 @@ mkdir -p "$RESOURCES"
 cp "$ROOT/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/R6DPI.icns" "$RESOURCES/R6DPI.icns"
 
+APP_SOURCES=(
+  "$ROOT/Sources/App/R6DPIStudioApp.swift"
+  "$ROOT/Sources/App/ContentView.swift"
+  "$ROOT/Sources/ViewModels/R6ViewModel.swift"
+  "$ROOT/Sources/Models/DPIStage.swift"
+  "$ROOT/Sources/Models/SensorSettings.swift"
+  "$ROOT/Sources/Models/R6Error.swift"
+  "$ROOT/Sources/HID/R6HIDDevice.swift"
+  "$ROOT/Sources/HID/R6HIDTransport.swift"
+  "$ROOT/Sources/HID/R6Protocol.swift"
+)
+
 swiftc \
-  "$ROOT/Sources/R6DPIApp.swift" \
+  "${APP_SOURCES[@]}" \
   -o "$MACOS/R6DPIStudio" \
   -framework SwiftUI \
   -framework AppKit \
@@ -21,7 +33,7 @@ swiftc \
   -parse-as-library
 
 swiftc \
-  "$ROOT/Sources/R6DPIHelper.swift" \
+  "$ROOT/Sources/Helper/R6DPIHelper.swift" \
   -o "$MACOS/R6DPIHelper" \
   -framework IOKit
 

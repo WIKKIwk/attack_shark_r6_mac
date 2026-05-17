@@ -116,7 +116,21 @@ open "$HOME/Desktop/R6 DPI Studio.app"
 ```text
 .
 |-- Sources/
-|   `-- R6DPIApp.swift
+|   |-- App/
+|   |   |-- R6DPIStudioApp.swift
+|   |   `-- ContentView.swift
+|   |-- ViewModels/
+|   |   `-- R6ViewModel.swift
+|   |-- Models/
+|   |   |-- DPIStage.swift
+|   |   |-- SensorSettings.swift
+|   |   `-- R6Error.swift
+|   |-- HID/
+|   |   |-- R6HIDDevice.swift
+|   |   |-- R6HIDTransport.swift
+|   |   `-- R6Protocol.swift
+|   `-- Helper/
+|       `-- R6DPIHelper.swift
 |-- Resources/
 |   |-- R6DPI.icns
 |   `-- R6DPI.iconset/
