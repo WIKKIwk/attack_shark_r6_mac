@@ -201,7 +201,7 @@ private final class R6HID: @unchecked Sendable {
         request[6] = UInt8(profile)
         request[7] = UInt8(stage)
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     func dpiStages(profile: Int) throws -> [DPIStage] {
@@ -232,7 +232,15 @@ private final class R6HID: @unchecked Sendable {
     }
 
     func writeDPIStage(profile: Int, stageID: Int, dpi: Int) throws {
-        let current = try dpiStages(profile: profile)
+        let fallback = [
+            DPIStage(id: 1, x: 800, y: 800),
+            DPIStage(id: 2, x: 1200, y: 1200),
+            DPIStage(id: 3, x: 3200, y: 3200),
+            DPIStage(id: 4, x: 5600, y: 5600),
+            DPIStage(id: 5, x: 2400, y: 2400),
+            DPIStage(id: 6, x: 42000, y: 42000)
+        ]
+        let current = fallback
         guard current.contains(where: { $0.id == stageID }) else {
             throw R6Error.invalidResponse("DPI stage tanlash")
         }
@@ -254,7 +262,7 @@ private final class R6HID: @unchecked Sendable {
             request[index + 3] = UInt8(value & 0xff)
         }
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     func sensorSettings(profile: Int) throws -> SensorSettings {
@@ -285,7 +293,7 @@ private final class R6HID: @unchecked Sendable {
         request[6] = UInt8(profile)
         request[7] = UInt8(value)
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     func setSensorToggle(profile: Int, toggle: SensorToggle, enabled: Bool) throws {
@@ -297,7 +305,7 @@ private final class R6HID: @unchecked Sendable {
         request[6] = UInt8(profile)
         request[7] = enabled ? 1 : 0
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     func setDebounceTime(profile: Int, value: Int) throws {
@@ -308,7 +316,7 @@ private final class R6HID: @unchecked Sendable {
         request[6] = UInt8(profile)
         request[7] = UInt8(value)
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     func setSleepTime(profile: Int, value: Int) throws {
@@ -320,7 +328,7 @@ private final class R6HID: @unchecked Sendable {
         request[7] = UInt8((value >> 8) & 0xff)
         request[8] = UInt8(value & 0xff)
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     func setButtonCombine(profile: Int, enabled: Bool) throws {
@@ -332,7 +340,7 @@ private final class R6HID: @unchecked Sendable {
         request[6] = UInt8(profile)
         request[7] = enabled ? 1 : 0
 
-        _ = try transact(request)
+        try sendReport(request)
     }
 
     private func sensorModelName() throws -> String {
@@ -419,6 +427,21 @@ private final class R6HID: @unchecked Sendable {
 
         let response = try transact(request)
         return (Int(response[8 - hidIndex]) << 8) + Int(response[9 - hidIndex])
+    }
+
+    private func sendReport(_ report: [UInt8]) throws {
+        guard let device else {
+            throw R6Error.deviceNotFound
+        }
+
+        var output = report
+        let outputLength = output.count
+        let setResult = output.withUnsafeMutableBufferPointer {
+            IOHIDDeviceSetReport(device, kIOHIDReportTypeFeature, CFIndex(0), $0.baseAddress!, outputLength)
+        }
+        guard setResult == kIOReturnSuccess else {
+            throw R6Error.reportFailed("Mouse'ga yozish", setResult)
+        }
     }
 
     private func transact(_ report: [UInt8], delayNanoseconds: UInt64 = 50_000_000) throws -> [UInt8] {
@@ -546,8 +569,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
     func connect() {
         run("Ulanmoqda...") { hid in
             try Self.connectWithRetry(hid)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "R6 ulandi", true)
+            return (nil, "R6 HID ochildi. Sozlamani yozish mumkin.", true)
         }
     }
 
@@ -561,86 +583,70 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
     func applySelectedDPI() {
         let dpi = clamp(Int(selectedDPI.rounded()))
         let connected = isConnected
+        let currentProfile = profile > 0 ? profile : 1
+        let currentStage = activeStage > 0 ? activeStage : 1
         run("\(dpi) DPI yozilmoqda...") { hid in
             if !connected {
                 try Self.connectWithRetry(hid)
             }
 
-            var snapshot = try Self.readSnapshot(from: hid)
-            let targetStage: Int
-            if let exact = snapshot.stages.first(where: { $0.x == dpi }) {
-                targetStage = exact.id
-            } else if snapshot.activeStage > 0 {
-                targetStage = snapshot.activeStage
-                try hid.writeDPIStage(profile: snapshot.profile, stageID: targetStage, dpi: dpi)
-            } else {
-                targetStage = 1
-                try hid.writeDPIStage(profile: snapshot.profile, stageID: targetStage, dpi: dpi)
-            }
-
-            try hid.setActiveDPIStage(profile: snapshot.profile, stage: targetStage)
-            snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "\(dpi) DPI aktiv qilindi", true)
+            try hid.writeDPIStage(profile: currentProfile, stageID: currentStage, dpi: dpi)
+            try hid.setActiveDPIStage(profile: currentProfile, stage: currentStage)
+            return (nil, "\(dpi) DPI yozildi", true)
         }
     }
 
     func activate(stage: DPIStage) {
         let currentProfile = profile
         run("\(stage.label) aktiv qilinmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setActiveDPIStage(profile: profile, stage: stage.id)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "\(stage.label) aktiv", true)
+            return (nil, "\(stage.label) aktiv", true)
         }
     }
 
     func setLOD(_ value: Int) {
         let currentProfile = profile
         run("LOD \(value) yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setLOD(profile: profile, value: value)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "LOD \(value) aktiv", true)
+            return (nil, "LOD \(value) aktiv", true)
         }
     }
 
     func setSensorToggle(_ toggle: SensorToggle, enabled: Bool) {
         let currentProfile = profile
         run("Sensor sozlamasi yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setSensorToggle(profile: profile, toggle: toggle, enabled: enabled)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "Sensor sozlamasi saqlandi", true)
+            return (nil, "Sensor sozlamasi saqlandi", true)
         }
     }
 
     func setDebounceTime(_ value: Int) {
         let currentProfile = profile
         run("Debounce \(value)ms yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setDebounceTime(profile: profile, value: value)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "Debounce \(value)ms saqlandi", true)
+            return (nil, "Debounce \(value)ms saqlandi", true)
         }
     }
 
     func setSleepTime(_ value: Int) {
         let currentProfile = profile
         run("Sleep \(value) yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setSleepTime(profile: profile, value: value)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "Sleep time saqlandi", true)
+            return (nil, "Sleep time saqlandi", true)
         }
     }
 
     func setButtonCombine(enabled: Bool) {
         let currentProfile = profile
         run("Combo keys yozilmoqda...") { hid in
-            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setButtonCombine(profile: profile, enabled: enabled)
-            let snapshot = try Self.readSnapshot(from: hid)
-            return (snapshot, "Combo keys saqlandi", true)
+            return (nil, "Combo keys saqlandi", true)
         }
     }
 
@@ -682,7 +688,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
 
     private func run(
         _ busyStatus: String,
-        _ action: @escaping @Sendable (R6HID) throws -> (R6Snapshot, String, Bool)
+        _ action: @escaping @Sendable (R6HID) throws -> (R6Snapshot?, String, Bool)
     ) {
         isBusy = true
         status = busyStatus
@@ -691,7 +697,9 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
             do {
                 let result = try action(self.hid)
                 DispatchQueue.main.async {
-                    self.apply(result.0)
+                    if let snapshot = result.0 {
+                        self.apply(snapshot)
+                    }
                     self.status = result.1
                     self.isConnected = result.2
                     self.isBusy = false
