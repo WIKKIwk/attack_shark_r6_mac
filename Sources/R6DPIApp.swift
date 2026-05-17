@@ -426,6 +426,7 @@ private struct ContentView: View {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(raisedPanelColor)
                     .frame(width: 58, height: 58)
+                    .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .stroke(borderColor)
@@ -475,6 +476,7 @@ private struct ContentView: View {
         }
         .padding(22)
         .background(raisedPanelColor, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(Color.white.opacity(0.03)), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(borderColor)
@@ -505,6 +507,7 @@ private struct ContentView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
                     .tint(accentColor)
+                    .glassEffect(.regular.tint(Color.white.opacity(0.03)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
             }
 
@@ -514,7 +517,7 @@ private struct ContentView: View {
                 } label: {
                     Label("Apply DPI", systemImage: "bolt.fill")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(accentColor)
                 .disabled(model.isBusy)
 
@@ -523,6 +526,7 @@ private struct ContentView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
+                .buttonStyle(.glass)
                 .tint(accentColor)
                 .disabled(model.isBusy)
 
@@ -531,12 +535,14 @@ private struct ContentView: View {
                 } label: {
                     Label("Reconnect", systemImage: "cable.connector")
                 }
+                .buttonStyle(.glass)
                 .tint(accentColor)
                 .disabled(model.isBusy)
             }
         }
         .padding(18)
         .background(panelColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassEffect(.regular.tint(Color.white.opacity(0.025)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(borderColor)
@@ -565,6 +571,10 @@ private struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(stage.id == model.activeStage ? Color.white.opacity(0.16) : Color.white.opacity(0.055))
+                        .glassEffect(
+                            .regular.tint(stage.id == model.activeStage ? Color.white.opacity(0.09) : Color.white.opacity(0.025)).interactive(),
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -577,6 +587,7 @@ private struct ContentView: View {
         }
         .padding(18)
         .background(panelColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassEffect(.regular.tint(Color.white.opacity(0.02)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(borderColor)
