@@ -6,6 +6,8 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>R6DPIStudio</string>
+	<key>CFBundleIconFile</key>
+	<string>R6DPI</string>
 	<key>CFBundleIdentifier</key>
 	<string>local.wikki.r6dpistudio</string>
 	<key>CFBundleInfoDictionaryVersion</key>
