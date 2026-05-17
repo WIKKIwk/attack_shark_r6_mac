@@ -91,8 +91,6 @@ private final class R6HID: @unchecked Sendable {
     private let vendorID = 0x373e
     private let productID = 0x0022
     private let preferredUsagePage = 0xffff
-    private let preferredUsage = 0
-    private let preferredInterfaceNumber = 2
     private let manager: IOHIDManager
     private var device: IOHIDDevice?
     private var hidIndex = 0
@@ -510,14 +508,11 @@ private final class R6HID: @unchecked Sendable {
 
     private func score(_ device: IOHIDDevice) -> Int {
         var result = 0
+        if hasFeatureReport64(device) {
+            result += 500
+        }
         if intProperty(device, kIOHIDPrimaryUsagePageKey as CFString) == preferredUsagePage {
             result += 100
-        }
-        if intProperty(device, kIOHIDPrimaryUsageKey as CFString) == preferredUsage {
-            result += 40
-        }
-        if intProperty(device, "bInterfaceNumber" as CFString) == preferredInterfaceNumber {
-            result += 40
         }
         if productName(device).localizedCaseInsensitiveContains("R6") {
             result += 50
@@ -526,6 +521,17 @@ private final class R6HID: @unchecked Sendable {
             result += 10
         }
         return result
+    }
+
+    private func hasFeatureReport64(_ device: IOHIDDevice) -> Bool {
+        guard let elements = IOHIDDeviceCopyMatchingElements(device, nil, IOOptionBits(kIOHIDOptionsTypeNone)) as? [IOHIDElement] else {
+            return false
+        }
+        return elements.contains { element in
+            IOHIDElementGetType(element) == kIOHIDElementTypeFeature &&
+                IOHIDElementGetReportID(element) == 0 &&
+                IOHIDElementGetReportCount(element) == 64
+        }
     }
 
     private func productName(_ device: IOHIDDevice) -> String {
@@ -592,7 +598,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
 
             try hid.writeDPIStage(profile: currentProfile, stageID: currentStage, dpi: dpi)
             try hid.setActiveDPIStage(profile: currentProfile, stage: currentStage)
-            return (nil, "\(dpi) DPI yozildi", true)
+            return (nil, "\(dpi) DPI buyruq yuborildi", true)
         }
     }
 
@@ -601,7 +607,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         run("\(stage.label) aktiv qilinmoqda...") { hid in
             let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setActiveDPIStage(profile: profile, stage: stage.id)
-            return (nil, "\(stage.label) aktiv", true)
+            return (nil, "\(stage.label) aktiv qilish buyrug'i yuborildi", true)
         }
     }
 
@@ -610,7 +616,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         run("LOD \(value) yozilmoqda...") { hid in
             let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setLOD(profile: profile, value: value)
-            return (nil, "LOD \(value) aktiv", true)
+            return (nil, "LOD \(value) buyrug'i yuborildi", true)
         }
     }
 
@@ -619,7 +625,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         run("Sensor sozlamasi yozilmoqda...") { hid in
             let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setSensorToggle(profile: profile, toggle: toggle, enabled: enabled)
-            return (nil, "Sensor sozlamasi saqlandi", true)
+            return (nil, "Sensor buyrug'i yuborildi", true)
         }
     }
 
@@ -628,7 +634,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         run("Debounce \(value)ms yozilmoqda...") { hid in
             let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setDebounceTime(profile: profile, value: value)
-            return (nil, "Debounce \(value)ms saqlandi", true)
+            return (nil, "Debounce \(value)ms buyrug'i yuborildi", true)
         }
     }
 
@@ -637,7 +643,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         run("Sleep \(value) yozilmoqda...") { hid in
             let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setSleepTime(profile: profile, value: value)
-            return (nil, "Sleep time saqlandi", true)
+            return (nil, "Sleep time buyrug'i yuborildi", true)
         }
     }
 
@@ -646,7 +652,7 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
         run("Combo keys yozilmoqda...") { hid in
             let profile = currentProfile > 0 ? currentProfile : 1
             try hid.setButtonCombine(profile: profile, enabled: enabled)
-            return (nil, "Combo keys saqlandi", true)
+            return (nil, "Combo keys buyrug'i yuborildi", true)
         }
     }
 
