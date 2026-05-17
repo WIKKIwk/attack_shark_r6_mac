@@ -11,6 +11,7 @@ private struct DPIStage: Identifiable, Equatable, Sendable {
 
 private struct SensorSettings: Sendable {
     var sensorModel: String = "-"
+    var batteryPercent = 0
     var lod: Int = 1
     var pollingRateCode = 0
     var debounceTime = 0
@@ -22,6 +23,7 @@ private struct SensorSettings: Sendable {
     var hyperMode = false
     var dpiIndicator = false
     var dpiXY = false
+    var buttonCombine = false
 }
 
 private enum SensorToggle: Sendable {
@@ -243,6 +245,7 @@ private final class R6HID: @unchecked Sendable {
     func sensorSettings(profile: Int) throws -> SensorSettings {
         SensorSettings(
             sensorModel: try sensorModelName(),
+            batteryPercent: try batteryPercent(),
             lod: try getByteFeature(profile: profile, code: 136),
             pollingRateCode: try pollingRateCode(profile: profile),
             debounceTime: try debounceTime(profile: profile),
@@ -253,7 +256,8 @@ private final class R6HID: @unchecked Sendable {
             trackingMode: try getBoolFeature(profile: profile, toggle: .trackingMode),
             hyperMode: try getBoolFeature(profile: profile, toggle: .hyperMode),
             dpiIndicator: try getBoolFeature(profile: profile, toggle: .dpiIndicator),
-            dpiXY: try getBoolFeature(profile: profile, toggle: .dpiXY)
+            dpiXY: try getBoolFeature(profile: profile, toggle: .dpiXY),
+            buttonCombine: try buttonCombine(profile: profile)
         )
     }
 
@@ -304,6 +308,18 @@ private final class R6HID: @unchecked Sendable {
         _ = try transact(request)
     }
 
+    func setButtonCombine(profile: Int, enabled: Bool) throws {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[4] = 3
+        request[5] = 1
+        request[6] = UInt8(profile)
+        request[7] = enabled ? 1 : 0
+
+        _ = try transact(request)
+    }
+
     private func sensorModelName() throws -> String {
         var request = emptyReport()
         request[2] = 2
@@ -330,6 +346,34 @@ private final class R6HID: @unchecked Sendable {
 
         let response = try transact(request)
         return Int(response[8 - hidIndex])
+    }
+
+    private func batteryPercent() throws -> Int {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[5] = 131
+
+        let response = try transact(request, delayNanoseconds: 100_000_000)
+        if response.count > 8, response[6] == 131 {
+            return Int(response[7])
+        }
+        if response.count > 7, response[5] == 131 {
+            return Int(response[6])
+        }
+        return 0
+    }
+
+    private func buttonCombine(profile: Int) throws -> Bool {
+        var request = emptyReport()
+        request[2] = 2
+        request[3] = 2
+        request[4] = 3
+        request[5] = 129
+        request[6] = UInt8(profile)
+
+        let response = try transact(request)
+        return response[8 - hidIndex] == 1
     }
 
     private func pollingRateCode(profile: Int) throws -> Int {
@@ -556,6 +600,16 @@ private final class R6ViewModel: ObservableObject, @unchecked Sendable {
             try hid.setSleepTime(profile: profile, value: value)
             let snapshot = try Self.readSnapshot(from: hid)
             return (snapshot, "Sleep time saqlandi", true)
+        }
+    }
+
+    func setButtonCombine(enabled: Bool) {
+        let currentProfile = profile
+        run("Combo keys yozilmoqda...") { hid in
+            let profile = currentProfile > 0 ? currentProfile : try hid.profileID()
+            try hid.setButtonCombine(profile: profile, enabled: enabled)
+            let snapshot = try Self.readSnapshot(from: hid)
+            return (snapshot, "Combo keys saqlandi", true)
         }
     }
 
@@ -867,7 +921,7 @@ private struct ContentView: View {
                         .foregroundStyle(secondaryText)
                 }
                 Spacer()
-                Text("Profile \(model.profile == 0 ? "-" : "\(model.profile)")")
+                Text("Battery \(model.sensor.batteryPercent)%  •  Profile \(model.profile == 0 ? "-" : "\(model.profile)")")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(secondaryText)
             }
@@ -926,6 +980,10 @@ private struct ContentView: View {
 
                 HStack {
                     sensorToggle("DPI X/Y Split", .dpiXY, model.sensor.dpiXY)
+                    comboKeyToggle
+                }
+
+                HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Debounce")
                             .font(.caption.weight(.semibold))
@@ -999,6 +1057,37 @@ private struct ContentView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(primaryText)
+                    Text(isOn ? "On" : "Off")
+                        .font(.caption2)
+                        .foregroundStyle(secondaryText)
+                }
+                Spacer()
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isOn ? primaryText : secondaryText)
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity)
+            .background(isOn ? Color.white.opacity(0.14) : Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .glassEffect(.regular.tint(isOn ? Color.white.opacity(0.08) : Color.white.opacity(0.025)).interactive(), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(isOn ? Color.white.opacity(0.18) : borderColor)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isBusy)
+    }
+
+    private var comboKeyToggle: some View {
+        let isOn = model.sensor.buttonCombine
+        return Button {
+            model.setButtonCombine(enabled: !isOn)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Combo Keys")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(primaryText)
                     Text(isOn ? "On" : "Off")
